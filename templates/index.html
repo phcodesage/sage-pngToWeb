@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>WebP Converter</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Inter', system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; }
+    .dropzone.dragover { border-color: #4f46e5; background-color: #eef2ff; }
+  </style>
+</head>
+<body class="min-h-screen bg-slate-50 text-slate-800">
+  <div class="max-w-3xl mx-auto p-6">
+    <header class="text-center mt-10 mb-8">
+      <h1 class="text-3xl md:text-4xl font-bold tracking-tight">PNG/JPG to <span class="text-indigo-600">WebP</span> Converter</h1>
+      <p class="mt-3 text-slate-600">Upload one or more images and convert them to a downloadable ZIP of WebP files.</p>
+    </header>
+
+    <main class="bg-white rounded-xl shadow-sm ring-1 ring-slate-200 p-6 md:p-8">
+      <form id="uploadForm" class="space-y-6">
+        <div id="dropzone" class="dropzone flex flex-col items-center justify-center gap-3 border-2 border-dashed border-slate-300 rounded-lg p-8 text-center transition-colors">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-10 h-10 text-indigo-600">
+            <path fill-rule="evenodd" d="M1.5 6A2.25 2.25 0 013.75 3.75h16.5A2.25 2.25 0 0122.5 6v12a2.25 2.25 0 01-2.25 2.25H3.75A2.25 2.25 0 011.5 18V6zm4.28 3.97a.75.75 0 011.06 0l3.44 3.44V7.5a.75.75 0 011.5 0v5.91l3.44-3.44a.75.75 0 111.06 1.06l-4.75 4.75a.75.75 0 01-1.06 0L5.78 11.03a.75.75 0 010-1.06z" clip-rule="evenodd" />
+          </svg>
+          <div>
+            <p class="font-semibold">Drag & drop images here</p>
+            <p class="text-sm text-slate-500">or</p>
+          </div>
+          <label class="relative inline-flex items-center px-4 py-2 rounded-md bg-indigo-600 text-white font-medium cursor-pointer hover:bg-indigo-500 transition-colors">
+            <input id="fileInput" type="file" name="images" accept=".png,.jpg,.jpeg" multiple class="sr-only">
+            Choose files
+          </label>
+          <p class="text-xs text-slate-500 mt-1">Supported: PNG, JPG. Max recommended size: 10MB each.</p>
+        </div>
+
+        <div id="fileList" class="grid grid-cols-1 sm:grid-cols-2 gap-4 hidden"></div>
+
+        <div class="flex items-center gap-3">
+          <button id="convertBtn" type="submit" class="inline-flex items-center gap-2 px-4 py-2 rounded-md bg-indigo-600 text-white font-semibold hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed">
+            <svg id="spinner" class="hidden animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
+            </svg>
+            <span id="btnText">Convert to WebP</span>
+          </button>
+          <div id="status" class="text-sm text-slate-600"></div>
+        </div>
+      </form>
+    </main>
+
+    <footer class="text-center text-xs text-slate-500 mt-8">Built with Flask + Pillow</footer>
+  </div>
+
+  <script>
+    const dropzone = document.getElementById('dropzone');
+    const fileInput = document.getElementById('fileInput');
+    const fileList = document.getElementById('fileList');
+    const form = document.getElementById('uploadForm');
+    const convertBtn = document.getElementById('convertBtn');
+    const spinner = document.getElementById('spinner');
+    const btnText = document.getElementById('btnText');
+    const statusEl = document.getElementById('status');
+
+    let files = [];
+
+    function renderFiles() {
+      if (!files.length) {
+        fileList.classList.add('hidden');
+        statusEl.textContent = '';
+        return;
+      }
+      fileList.classList.remove('hidden');
+      fileList.innerHTML = '';
+      files.forEach((f, idx) => {
+        const item = document.createElement('div');
+        item.className = 'flex items-center justify-between gap-3 border border-slate-200 rounded-md p-3';
+        const name = document.createElement('div');
+        name.className = 'truncate';
+        name.textContent = f.name;
+        const size = document.createElement('div');
+        size.className = 'text-xs text-slate-500';
+        size.textContent = (f.size / 1024).toFixed(1) + ' KB';
+        const removeBtn = document.createElement('button');
+        removeBtn.className = 'text-xs text-red-600 hover:underline';
+        removeBtn.textContent = 'Remove';
+        removeBtn.onclick = () => {
+          files.splice(idx, 1);
+          renderFiles();
+        };
+        const left = document.createElement('div');
+        left.className = 'flex items-center gap-3';
+        left.appendChild(name);
+        left.appendChild(size);
+        item.appendChild(left);
+        item.appendChild(removeBtn);
+        fileList.appendChild(item);
+      });
+      statusEl.textContent = `${files.length} file(s) ready`;
+    }
+
+    function addFiles(newFiles) {
+      for (const f of newFiles) {
+        if (!['image/png', 'image/jpeg'].includes(f.type)) continue;
+        files.push(f);
+      }
+      renderFiles();
+    }
+
+    dropzone.addEventListener('click', () => fileInput.click());
+
+    dropzone.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      dropzone.classList.add('dragover');
+    });
+    dropzone.addEventListener('dragleave', () => dropzone.classList.remove('dragover'));
+    dropzone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dropzone.classList.remove('dragover');
+      addFiles(e.dataTransfer.files);
+    });
+
+    fileInput.addEventListener('change', (e) => addFiles(e.target.files));
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      if (!files.length) {
+        statusEl.textContent = 'Please add at least one PNG or JPG file.';
+        return;
+      }
+      convertBtn.disabled = true;
+      spinner.classList.remove('hidden');
+      btnText.textContent = 'Converting...';
+      statusEl.textContent = 'Uploading and converting...';
+
+      try {
+        const fd = new FormData();
+        files.forEach(f => fd.append('images', f, f.name));
+        const res = await fetch('/convert', { method: 'POST', body: fd });
+        if (!res.ok) {
+          const text = await res.text();
+          throw new Error(text || 'Conversion failed');
+        }
+        const blob = await res.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'converted_images.zip';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(url);
+        statusEl.textContent = 'Download started.';
+      } catch (err) {
+        console.error(err);
+        statusEl.textContent = err.message || 'An error occurred.';
+      } finally {
+        convertBtn.disabled = false;
+        spinner.classList.add('hidden');
+        btnText.textContent = 'Convert to WebP';
+      }
+    });
+  </script>
+</body>
+</html>
